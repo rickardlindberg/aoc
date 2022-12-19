@@ -1,9 +1,5 @@
 import doctest
 
-"""
-* Make Shape a set
-"""
-
 class Shape(set):
 
     def __repr__(self):
@@ -13,17 +9,8 @@ class Shape(set):
         """
         >>> Shape([(0, 0)]).translate(dx=1, dy=1)
         Shape((1, 1))
-
-        >>> Shape([(0, 0)]).translate(dx=-1)
-        Shape((0, 0))
-
-        >>> Shape([(0, 0)]).translate(dx=7)
-        Shape((0, 0))
         """
-        new_shape = Shape([(x+dx, y+dy) for x, y in self])
-        if new_shape.min_x() < 0 or new_shape.max_x() > 6:
-            return self
-        return new_shape
+        return Shape([(x+dx, y+dy) for x, y in self])
 
     def overlaps(self, shape):
         """
@@ -32,6 +19,17 @@ class Shape(set):
 
         >>> Shape([(1, 2)]).overlaps(Shape([(1, 1)]))
         False
+
+        I overlap with another shape if I am outside boundaries:
+
+        >>> Shape([(-1, 1)]).overlaps(Shape([]))
+        True
+
+        >>> Shape([(7, 1)]).overlaps(Shape([]))
+        True
+
+        >>> Shape([(0, 0)]).overlaps(Shape([]))
+        True
         """
         for position in self:
             x, y = position
@@ -44,21 +42,6 @@ class Shape(set):
             if position in shape:
                 return True
         return False
-
-    def min_x(self):
-        """
-        """
-        return min(x for x, y in self.union(set([(0, None)])))
-
-    def max_x(self):
-        """
-        """
-        return max(x for x, y in self.union(set([(6, None)])))
-
-    def min_y(self):
-        """
-        """
-        return min(y for x, y in self.union(set([(None, 0)])))
 
     def max_y(self):
         """
@@ -77,10 +60,10 @@ class Shape(set):
     def prune(self):
         """
         """
-        lines_to_prune = self.reachable_depth()
-        return lines_to_prune, self.translate(dy=-lines_to_prune)
+        lines_to_prune = self.unreachable_lines()
+        return lines_to_prune, Shape([(x, y) for x, y in self.translate(dy=-lines_to_prune) if y > 0])
 
-    def reachable_depth(self):
+    def unreachable_lines(self):
         """
         >>> shape = Shape([
         ...                            (3, 2),
@@ -90,17 +73,27 @@ class Shape(set):
         |...#...|
         |######.|
         +-------+
-        >>> shape.reachable_depth()
+        >>> shape.unreachable_lines()
         0
+
+        >>> shape = Shape([
+        ...                            (3, 2),
+        ...    (0, 1), (1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 1),
+        ... ])
+        >>> shape.print()
+        |...#...|
+        |#######|
+        +-------+
+        >>> shape.unreachable_lines()
+        1
         """
-        def inner(x, y, trail=[]):
-            if (x, y) in cache:
-                return cache[(x, y)]
-            if y <= 0:
-                return 0
+        def min_reachable_y_from(x, y):
+            trail.add((x, y))
+            if y <= 1:
+                return 1
             else:
-                result = min([y]+[
-                    inner(x2, y2, trail+[(x2, y2)])
+                return min([y]+[
+                    min_reachable_y_from(x2, y2)
                     for (x2, y2)
                     in [
                         (x-1, y),
@@ -113,15 +106,21 @@ class Shape(set):
                         (x2, y2) not in self and
                         (x2, y2) not in trail
                 ])
-                cache[(x, y)] = result
-                return result
-        cache = {}
-        return inner(0, self.max_y()+1)
+        trail = set()
+        return min_reachable_y_from(0, self.max_y()+1) - 1
 
     def print(self):
         """
+        >>> Shape([]).print()
+        +-------+
+
         >>> Shape([(0, 1)]).print()
         |#......|
+        +-------+
+
+        >>> Shape([(1, 2)]).print()
+        |.#.....|
+        |.......|
         +-------+
         """
         y = self.max_y()
@@ -139,8 +138,8 @@ def solve(number_of_stones, jet_pattern, debug=False):
     >>> solve(100, ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>")
     157
 
-    #>>> solve(2022, ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>")
-    #3068
+    >>> solve(2022, ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>")
+    3068
     """
     jet_pattern_index = 0
     rocks = [
@@ -171,7 +170,19 @@ def solve(number_of_stones, jet_pattern, debug=False):
     rock_index = 0
     contour = Shape([])
     total_pruned_lines = 0
-    for i in range(number_of_stones):
+    loop_index = 0
+    cache = {}
+    while loop_index < number_of_stones:
+        cache_key = (rock_index, jet_pattern_index, tuple(sorted(contour)))
+        if cache_key in cache:
+            prev_loop_index, prev_total_pruned_lines = cache[cache_key]
+            step = loop_index - prev_loop_index
+            if loop_index + step < number_of_stones:
+                loop_index += step
+                total_pruned_lines += (total_pruned_lines - prev_total_pruned_lines)
+                continue
+        cache[cache_key] = (loop_index, total_pruned_lines)
+        loop_index += 1
         rock = rocks[rock_index]
         rock_index = (rock_index + 1) % len(rocks)
         rock = rock.translate(dx=2, dy=contour.max_y()+4)
@@ -203,4 +214,5 @@ jet_pattern = "><<><>><<<>><><<<>>>><<<>><<<><<<<>>>><<>>><><>>>><<<<>><<<<><<<<
 if __name__ == "__main__":
     doctest.testmod()
     #solve(10, ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>", True)
+    print(solve(number_of_stones, jet_pattern))
     print("OK")
