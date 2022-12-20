@@ -178,8 +178,9 @@ def solve(number_of_stones, jet_pattern, debug=False):
             prev_loop_index, prev_total_pruned_lines = cache[cache_key]
             step = loop_index - prev_loop_index
             if loop_index + step < number_of_stones:
-                loop_index += step
-                total_pruned_lines += (total_pruned_lines - prev_total_pruned_lines)
+                factor = (number_of_stones - loop_index) // step
+                loop_index += step * factor
+                total_pruned_lines += (total_pruned_lines - prev_total_pruned_lines) * factor
                 continue
         cache[cache_key] = (loop_index, total_pruned_lines)
         loop_index += 1
