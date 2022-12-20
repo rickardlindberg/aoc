@@ -135,11 +135,11 @@ class Shape(set):
 
 def solve(number_of_stones, jet_pattern, debug=False):
     """
-    >>> solve(100, ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>")
-    157
-
     >>> solve(2022, ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>")
     3068
+
+    >>> solve(number_of_stones, jet_pattern)
+    1570930232582
     """
     jet_pattern_index = 0
     rocks = [
@@ -213,6 +213,4 @@ jet_pattern = "><<><>><<<>><><<<>>>><<<>><<<><<<<>>>><<>>><><>>>><<<<>><<<<><<<<
 
 if __name__ == "__main__":
     doctest.testmod()
-    #solve(10, ">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>", True)
-    print(solve(number_of_stones, jet_pattern))
     print("OK")
