@@ -1,0 +1,112 @@
+Parser {
+    start = instruction*:xs !. -> xs
+    instruction =
+        | 'inp ' reg:x               '\n' -> ["Inp" x]
+        | 'add ' reg:x ' ' operand:y '\n' -> ["Add" x y]
+        | 'mul ' reg:x ' ' operand:y '\n' -> ["Mul" x y]
+        | 'div ' reg:x ' ' operand:y '\n' -> ["Div" x y]
+        | 'mod ' reg:x ' ' operand:y '\n' -> ["Mod" x y]
+        | 'eql ' reg:x ' ' operand:y '\n' -> ["Eql" x y]
+    operand =
+        | reg:x                          -> ["Reg" x]
+        | ('-' | ''):x digit:y digit*:ys -> ["Num" int({x y ys})]
+    digit = '0'-'9'
+    reg = 'w' | 'x' | 'y' | 'z'
+}
+
+ToExpression {
+    start  = statement*:xs !. -> dict():regs
+                              -> set(regs "w" ["Num" 0])
+                              -> set(regs "x" ["Num" 0])
+                              -> set(regs "y" ["Num" 0])
+                              -> set(regs "z" ["Num" 0])
+                              -> [~~xs ["Set" "z" get(regs "z")]]
+    statement =
+        | ["Inp" .:r]         -> set(regs r ["Inp" label()])
+                              -> []
+        | [.:op .:r foo:y]    -> ["Tmp" label()]:tmp
+                              -> get(regs r):left
+                              -> y:right
+                              -> set(regs r tmp)
+                              -> [["Set" tmp [op left right]]]
+    foo    =
+        | ["Reg" .:r]    -> get(regs r)
+        | .
+}
+
+Pretty {
+    start = pretty*:xs !. -> { xs }
+    pretty =
+        | ["Set" .:x pretty:y]      -> { x " = " y "\n" }
+        | ["Add" pretty:x pretty:y] -> { "(" x " + " y ")" }
+        | ["Mul" pretty:x pretty:y] -> { "(" x " * " y ")" }
+        | ["Div" pretty:x pretty:y] -> { "(" x " / " y ")" }
+        | ["Mod" pretty:x pretty:y] -> { "(" x " % " y ")" }
+        | ["Eql" pretty:x pretty:y] -> { "(" x " == " y ")" }
+        | ["Num" .:x] -> x
+        | .
+}
+
+Simplify {
+    start = simplify*:xs !. -> xs
+    simplify =
+        | ["Set" .:x         simplify:y]  -> ["Set" x y]
+
+        | ["Mul" ["Num" 0]   simplify:x]  -> x
+        | ["Mul" simplify:x  ["Num" 0] ]  -> x
+        | ["Mul" ["Num" .:x]  ["Num" .:y] ]  -> ["Num" mmul(x y)]
+        | ["Add" ["Num" .:x] ["Num" .:y]] -> ["Num" madd(x y)]
+        | ["Mod" ["Num" .:x] ["Num" .:y]] -> ["Num" mmod(x y)]
+        | ["Add" simplify:x  ["Num" 0] ]  -> x
+        | ["Add" ["Num" .:x]  ["Num" .:y] ]  -> ["Num" madd(x y)]
+        | ["Div" simplify:x  ["Num" 1] ]  -> x
+        | ["Eql" large ["Inp" .]]  -> ["Num" 0]
+        | ["Eql" ["Num" 0] ["Num" 0]]  -> ["Num" 1]
+
+        | ["Add" simplify:x  simplify:y]  -> ["Add" x y]
+        | ["Mul" simplify:x  simplify:y]  -> ["Mul" x y]
+        | ["Div" simplify:x  simplify:y]  -> ["Div" x y]
+        | ["Mod" simplify:x  simplify:y]  -> ["Mod" x y]
+        | ["Eql" simplify:x  simplify:y]  -> ["Eql" x y]
+        | ["Num" .:x] -> ["Num" x]
+        | ["Tmp" .:x] -> ["Tmp" x]
+        | ["Inp" .:x] -> ["Inp" x]
+    large =
+        | ["Num" 10]
+}
+
+Expand {
+    start = record*:xs !. -> dict():vars
+                          -> run("expandx" xs)
+    record =
+        | ["Set" .:x .:y] -> set(vars {x} y)
+                          -> ["Set" x y]
+    expandx = expand*
+    expand =
+        | ["Set" .:x      expand:y] -> ["Set" x y]
+        | ["Add" expand:x expand:y] -> ["Add" x y]
+        | ["Mul" expand:x expand:y] -> ["Mul" x y]
+        | ["Div" expand:x expand:y] -> ["Div" x y]
+        | ["Mod" expand:x expand:y] -> ["Mod" x y]
+        | ["Eql" expand:x expand:y] -> ["Eql" x y]
+        | ["Tmp" .:x]               -> get(vars {"Tmp"x})
+        | .
+}
+
+RemoveUnusedTmps {
+    start = analyze*:xs !.            -> dict():sets
+                                      -> list():used
+                                      -> xs
+                                      -> add(used get(sets "z"))
+                                      -> used
+    analyze =
+        | ["Set" .:x       analyze:y] -> set(sets {x} ["Set" x y])
+        | ["Add" analyze:x analyze:y] -> ["Add" x y]
+        | ["Mul" analyze:x analyze:y] -> ["Mul" x y]
+        | ["Div" analyze:x analyze:y] -> ["Div" x y]
+        | ["Mod" analyze:x analyze:y] -> ["Mod" x y]
+        | ["Eql" analyze:x analyze:y] -> ["Eql" x y]
+        | ["Tmp" .:x]                 -> add(used get(sets {"Tmp" x}))
+                                      -> ["Tmp" x]
+        | .
+}
